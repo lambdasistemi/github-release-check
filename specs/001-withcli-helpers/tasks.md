@@ -32,28 +32,29 @@ No foundational tasks. Each slice below is fully self-contained — its cabal/so
 
 ---
 
-## Phase 3: Slice S1 — `withCli` + `CliBanner` in `GitHub.Release.Check.Cli` (US1, P1) 🎯 MVP
+## Phase 3: Slice S1 — Engine extraction + `withCli` + `CliBanner` (US1, P1) 🎯 MVP
 
-**Goal**: One-line `withCli` replacing the 8-line stanza; supports a `Config -> Config` modifier; env-var kill switch wins over the modifier.
+**Goal**: One-line `withCli` replacing the 8-line stanza; supports a `Config -> Config` modifier; env-var kill switch wins over the modifier. The same commit extracts the engine definitions from the umbrella into a new leaf module `GitHub.Release.Check.Engine` so the import graph stays acyclic (no `.hs-boot` workaround).
 
-**Independent Test**: After this slice ships, a consumer can write `main = withCli banner id action` (or with a non-`id` modifier) and the upgrade-banner-on-exit behaviour works identically to the current `do { disabled <- …; cfg <- defaultConfig …; withUpdateCheck cfg{ cfgDisabled = disabled } action }` stanza.
+**Independent Test**: After this slice ships, a consumer can write `main = withCli banner id action` (or with a non-`id` modifier) and the upgrade-banner-on-exit behaviour works identically to the current `do { disabled <- …; cfg <- defaultConfig …; withUpdateCheck cfg{ cfgDisabled = disabled } action }` stanza. Pre-existing consumers using `defaultConfig` / `withUpdateCheck` via `import GitHub.Release.Check` continue to compile unchanged — the umbrella re-exports `module Engine`.
 
-**Public-API contract**: [`contracts/public-api.md` § Module `GitHub.Release.Check.Cli`](./contracts/public-api.md#module-githubreleasecheckcli-new-in-core-library) and § Module `GitHub.Release.Check` (additive re-export).
+**Public-API contract**: [`contracts/public-api.md` § Module `GitHub.Release.Check.Engine`](./contracts/public-api.md#module-githubreleasecheckengine-new-in-core-library--refactor-extracted-from-the-umbrella), § Module `GitHub.Release.Check.Cli`, and § Module `GitHub.Release.Check` (pure re-export plumbing).
 
 **Composition truth table** (consumer-modifier vs env-var precedence): [`data-model.md` § Composition Pipeline](./data-model.md#composition-pipeline--composecliconfig).
 
 ### Tasks for slice S1
 
-- [ ] T001 [US1] RED — Add `test/GitHub/Release/Check/CliSpec.hs` (new) with hspec test cases that **fail to compile** initially (import `GitHub.Release.Check (CliBanner (..), composeCliConfig, withCli)` which do not yet exist). Tests must assert the four rows of the [`composeCliConfig` truth table](./data-model.md#composition-pipeline--composecliconfig), plus the modifier-applies-to-non-`cfgDisabled` fields case. Use `System.Environment.setEnv` / `unsetEnv` inside hspec `around_` to control the opt-out env var per case. Also add `GitHub.Release.Check.CliSpec` to the unit-tests `other-modules` in `github-release-check.cabal`. Observe RED: `just build` reports module/symbol not found.
-- [ ] T002 [US1] GREEN — Add `lib/GitHub/Release/Check/Cli.hs` (new) defining `CliBanner (..)`, `composeCliConfig :: CliBanner -> (Config -> Config) -> IO Config`, and `withCli :: CliBanner -> (Config -> Config) -> IO a -> IO a` exactly as per [`contracts/public-api.md`](./contracts/public-api.md#module-githubreleasecheckcli-new-in-core-library). Add `GitHub.Release.Check.Cli` to the library `exposed-modules` in `github-release-check.cabal`. Add a re-export `module GitHub.Release.Check.Cli` to `lib/GitHub/Release/Check.hs`'s export list (additive only; no other identifier touched). Module header + Haddock on every export. Implementation literally: `defaultConfig` → apply consumer `f` → if env var present, override `cfgDisabled = True`. Run `just unit` and confirm CliSpec passes.
-- [ ] T003 [US1] FOLD — T001 and T002 MUST be a single bisect-safe commit (resolve-ticket rule: one slice = one commit). The subagent stages all RED + GREEN files together and commits once.
+- [ ] T000 [US1] REFACTOR — Extract the engine definitions from `lib/GitHub/Release/Check.hs` into a new sibling leaf module `lib/GitHub/Release/Check/Engine.hs` **byte-for-byte** (the data declaration `Config (..)`, plus `defaultConfig`, `withUpdateCheck`, `runUpdateCheck`, `renderBanner`, and the private `runUnsafe` helper, with all their existing haddock and imports). The umbrella `lib/GitHub/Release/Check.hs` becomes pure re-export plumbing: only `module Cli`, `module Decision`, `module Engine`, `module Fetcher` in the export list, and the matching `import` lines. Preserve the umbrella module's top-level haddock docstring (the consumer-facing introduction). Add `GitHub.Release.Check.Engine` to the library `exposed-modules` in `github-release-check.cabal`. This refactor is folded into S1's single commit — it is the prerequisite that makes `Cli`'s import graph acyclic.
+- [ ] T001 [US1] RED — Add `test/GitHub/Release/Check/CliSpec.hs` (new) with hspec test cases that **fail to compile** initially (import `GitHub.Release.Check (CliBanner (..), composeCliConfig, withCli)` which do not yet exist). Tests must assert the four rows of the [`composeCliConfig` truth table](./data-model.md#composition-pipeline--composecliconfig), plus the modifier-applies-to-non-`cfgDisabled` fields case. Use `System.Environment.setEnv` / `unsetEnv` inside hspec `around_` (or per-case) to control the opt-out env var; use a UNIQUE env-var name per test case (e.g. `WITHCLI_TEST_OPT_OUT_A`, `…_B`, …) to avoid cross-test leakage. Also add `GitHub.Release.Check.CliSpec` to the unit-tests `other-modules` in `github-release-check.cabal`. Observe RED: `just build` reports module/symbol not found.
+- [ ] T002 [US1] GREEN — Add `lib/GitHub/Release/Check/Cli.hs` (new) defining `CliBanner (..)`, `composeCliConfig :: CliBanner -> (Config -> Config) -> IO Config`, and `withCli :: CliBanner -> (Config -> Config) -> IO a -> IO a` exactly as per [`contracts/public-api.md` § Module `GitHub.Release.Check.Cli`](./contracts/public-api.md#module-githubreleasecheckcli-new-in-core-library). `Cli.hs` imports `Config`, `defaultConfig`, `withUpdateCheck` directly from `GitHub.Release.Check.Engine` (NOT from the umbrella — that would re-introduce the cycle). Add `GitHub.Release.Check.Cli` to the library `exposed-modules` in `github-release-check.cabal`. The umbrella's export list already gained `module Cli` in T000, so no further edit to the umbrella is needed here. Module header + Haddock on every export. Implementation literally: `defaultConfig` → apply consumer `f` → if env var present, override `cfgDisabled = True`. Run `just unit` and confirm CliSpec passes.
+- [ ] T003 [US1] FOLD — T000, T001, T002 MUST be a single bisect-safe commit (resolve-ticket rule: one slice = one commit). The subagent stages all refactor + RED + GREEN files together and commits once.
 
 **Checkpoint**: After slice S1 ships, P1's load-bearing acceptance scenarios (#1–#6) hold; no other slice depends on S1's internals beyond the public `CliBanner` re-export.
 
 ### Subagent brief — S1
 
 ```text
-Task: T001, T002, T003 (slice S1)
+Task: T000, T001, T002, T003 (slice S1)
 
 Context:
 - You are not alone in the codebase. Do not revert edits made by others.
@@ -64,59 +65,140 @@ Context:
 - Commit subject must match Conventional Commits:
   `feat(cli): add CliBanner + withCli helper`
 - The commit body MUST include the trailer:
-  `Tasks: T001, T002, T003`
+  `Tasks: T000, T001, T002, T003`
 - Sign the commit with GPG (`git commit -S`).
+- ABSOLUTELY DO NOT create any `.hs-boot` file. If you find yourself
+  reaching for one, the engine extraction (T000) is not done. See
+  "Critical structural rule" below.
 
 Owned files:
-- lib/GitHub/Release/Check/Cli.hs (new)
-- lib/GitHub/Release/Check.hs (export list only — add one re-export line)
-- test/GitHub/Release/Check/CliSpec.hs (new)
-- github-release-check.cabal (add Cli to library exposed-modules; add CliSpec to test-suite other-modules)
+- lib/GitHub/Release/Check/Engine.hs (NEW — receives the extracted engine definitions)
+- lib/GitHub/Release/Check/Cli.hs (NEW — CliBanner + composeCliConfig + withCli)
+- lib/GitHub/Release/Check.hs (rewrite to PURE re-export plumbing: keep the top-level haddock docstring; export list becomes `module Cli`, `module Decision`, `module Engine`, `module Fetcher`; imports match)
+- test/GitHub/Release/Check/CliSpec.hs (NEW)
+- github-release-check.cabal (add BOTH `GitHub.Release.Check.Cli` and `GitHub.Release.Check.Engine` to library exposed-modules; add `GitHub.Release.Check.CliSpec` to test-suite other-modules)
 
 Forbidden scope:
+- ANY .hs-boot file. If you create lib/GitHub/Release/Check.hs-boot
+  the commit is rejected on review.
 - specs/ (orchestrator owns)
 - gate.sh (orchestrator owns; subagent S3 will be authorized to extend it later)
-- README.md
+- README.md, CHANGELOG.md
 - app/canary/Main.hs (slice S3 territory)
 - New sublibrary section in the cabal file (slice S2 territory)
-- Any change to existing identifiers in lib/GitHub/Release/Check{,/Cache,/Decision,/Fetcher}.hs other than the one re-export line in lib/GitHub/Release/Check.hs
-- PR / issue metadata
+- Any rename, signature change, or behavioural change to the engine
+  definitions during the extraction. T000 is byte-for-byte: copy
+  Config (..), defaultConfig, withUpdateCheck, runUpdateCheck,
+  renderBanner, and the private runUnsafe helper from the old
+  GitHub.Release.Check.hs into the new Engine.hs WITHOUT editing
+  haddocks, signatures, field names, defaults, imports, or
+  formatting beyond what fourmolu requires.
+- Other lib/ modules (Cache, Decision, Fetcher) — do NOT touch.
+- PR / issue metadata.
+
+Critical structural rule (why a previous attempt failed):
+- The naive shape "Cli.hs imports from GitHub.Release.Check; the
+  umbrella re-exports module Cli" produces a hard module-graph cycle
+  GHC error (GHC-92213). The fix is NOT a .hs-boot file. The fix is:
+    * Engine.hs holds Config / defaultConfig / withUpdateCheck /
+      runUpdateCheck / renderBanner / runUnsafe (extracted byte-
+      for-byte from the umbrella).
+    * Cli.hs imports Config / defaultConfig / withUpdateCheck
+      DIRECTLY from GitHub.Release.Check.Engine (NOT from
+      GitHub.Release.Check).
+    * The umbrella becomes pure re-export plumbing — no own
+      definitions, only `module Cli`, `module Decision`,
+      `module Engine`, `module Fetcher` in the export list and
+      matching imports.
+  With that structure there is no cycle (Cli → Engine → Cache/Decision/
+  Fetcher; umbrella → all four leaves).
 
 Required orchestrator analysis already applied (do NOT re-derive):
-- Public-API contract: specs/001-withcli-helpers/contracts/public-api.md § "Module GitHub.Release.Check.Cli" and § "Module GitHub.Release.Check".
+- Public-API contract:
+    * specs/001-withcli-helpers/contracts/public-api.md
+      § "Module GitHub.Release.Check.Engine" — the extracted module.
+      § "Module GitHub.Release.Check.Cli" — the new helper.
+      § "Module GitHub.Release.Check" — the re-export-only umbrella shape.
+      § "Cabal manifest deltas" — exact exposed-modules and test other-modules changes.
 - CliBanner field types: specs/001-withcli-helpers/data-model.md § "Entity — CliBanner".
-- Composition order: defaultConfig → consumer modifier (Config -> Config) → if env-var present, force cfgDisabled = True. The env-var kill switch wins (specs/001-withcli-helpers/data-model.md § truth table, plus spec.md FR-002 + FR-003 + P1 acceptance #6).
+- Composition order: defaultConfig → consumer modifier (Config -> Config) → if env-var present, force cfgDisabled = True. The env-var kill switch wins (data-model.md § Composition Pipeline truth table, plus spec.md FR-002 + FR-003 + P1 acceptance #6).
 - composeCliConfig MUST be exported alongside withCli (research.md Decision 4 — needed for test inspection without faking the fetcher).
-- Module placement: new sibling module GitHub.Release.Check.Cli + re-export from GitHub.Release.Check. Do NOT fold into the umbrella module (project rule "Separate modules always").
-- Haddock: every export gets a haddock; module gets a header (project convention).
+- Haddock: every export gets a haddock; every module gets a header (project convention). Engine.hs keeps the existing haddocks from the old umbrella verbatim. Cli.hs gets fresh haddocks. The umbrella's top-level docstring stays (the consumer-facing introduction).
 - Fourmolu 70-char line limit, leading commas/arrows.
 - Use GHC2021 + the project's default-extensions block (already inherited via `import: warnings` and the common stanza).
 
 RED proof (write first, observe failing):
-- Add test/GitHub/Release/Check/CliSpec.hs importing the symbols that do not yet exist. Initially run `just build` and observe the build/test FAIL with "Variable not in scope" or similar.
+- Do T000 first (Engine extraction + umbrella rewrite + cabal Engine entry). Run `just build` — it should still pass green (refactor is byte-for-byte; external behaviour unchanged).
+- Then add test/GitHub/Release/Check/CliSpec.hs importing the symbols that do not yet exist (`CliBanner (..)`, `composeCliConfig`, `withCli`). Add `CliSpec` to test-suite other-modules. Run `just build` — observe the build FAIL with "Variable not in scope: CliBanner" (or similar) and capture this output. This is the RED state.
 - The CliSpec must cover the four-row composition truth table from data-model.md:
   (a) env unset, modifier id → cfgDisabled = False after composeCliConfig
   (b) env unset, modifier sets cfgDisabled = True → cfgDisabled = True
   (c) env SET, modifier id → cfgDisabled = True
-  (d) env SET, modifier sets cfgDisabled = False → cfgDisabled = True (env wins — this is the kill-switch invariant from P1 acceptance #6)
+  (d) env SET, modifier sets cfgDisabled = False → cfgDisabled = True
+      (env wins — kill-switch invariant from P1 acceptance #6)
   PLUS:
-  (e) modifier override of a non-cfgDisabled field (e.g. cfgCheckInterval) survives composition unchanged
-- Use hspec `around_` with `setEnv` / `unsetEnv` from System.Environment to control the env var per case. The env-var name in each test can be unique per spec (e.g. "WITHCLI_TEST_OPT_OUT_<n>") to avoid leakage.
-- Stage these test edits + the cabal `other-modules` line in the SAME commit as the implementation; observe RED locally before staging the implementation files.
+  (e) modifier override of a non-cfgDisabled field (e.g. set
+      cfgCheckInterval = 1234) survives composition with env unset
+  (f) same modifier override survives composition with env set
+- Use hspec `around_` (or per-case bracket) with `setEnv` / `unsetEnv`
+  from System.Environment. Use a UNIQUE env-var name per test case
+  (e.g. "WITHCLI_TEST_OPT_OUT_A", "…_B", …) to avoid leakage.
+- Important: GHC's base `setEnv name ""` may behave as `unsetEnv` on
+  some POSIX platforms — for row (d) use `setEnv name "1"` (or any
+  non-empty value).
 
 GREEN proof (must pass after implementation):
 - nix develop --quiet -c just unit
 - ./gate.sh
-- Both must exit 0. The hspec output must show CliSpec cases all passing.
+- Both must exit 0. The hspec output must show CliSpec cases all
+  passing AND CacheSpec / DecisionSpec still passing (the extraction
+  must not have broken them).
 
 Commit subject (use this exact title):
 - feat(cli): add CliBanner + withCli helper
 
+Suggested commit body shape (multi-line; first paragraph = description;
+last line = trailer):
+    Adds the one-liner consumer helper that bundles env-var opt-out,
+    defaultConfig, optional consumer Config modifier, and withUpdateCheck.
+
+      - CliBanner record (cliRepo, cliExe, cliVersion, cliOptOutEnvVar)
+      - composeCliConfig — pure composition surface for testing and for
+        consumers that want the assembled Config without entering the
+        withUpdateCheck pipeline
+      - withCli = composeCliConfig >>= withUpdateCheck
+
+    Composition order: defaultConfig → consumer modifier → env-var kill
+    switch (env-var wins, per FR-002 + FR-003).
+
+    Structural refactor folded in: the engine definitions (Config,
+    defaultConfig, withUpdateCheck, runUpdateCheck, renderBanner,
+    runUnsafe) move byte-for-byte from GitHub.Release.Check into a new
+    leaf GitHub.Release.Check.Engine. The umbrella becomes pure
+    re-export plumbing. This removes the otherwise-cyclic dependency
+    between Cli and the umbrella without needing an .hs-boot file.
+
+    The new helpers are re-exported via the umbrella so consumers
+    write a single import. Strictly additive at the public surface —
+    every previously-exported identifier remains reachable through
+    GitHub.Release.Check.
+
+    Tasks: T000, T001, T002, T003
+
 Report back (exactly these fields):
-- Files changed (paths only).
-- RED evidence: paste the failing `just build` (or `just unit`) output BEFORE the implementation files were added.
-- GREEN evidence: paste the tail of `just unit` output AFTER the implementation, showing CliSpec passing, plus the tail of `./gate.sh`.
-- Commit short-sha and the Tasks: trailer line from the commit body.
+- Files changed (paths only). Confirm in writing that NO .hs-boot
+  file exists in the commit.
+- RED evidence: paste the failing `just build` output AFTER T000 +
+  the test additions but BEFORE the Cli.hs implementation.
+- GREEN evidence: paste the tail of `just unit` AFTER the implementation,
+  showing CliSpec passing AND the pre-existing CacheSpec /
+  DecisionSpec still passing; plus the final lines of `./gate.sh`.
+- Commit short-sha and the `Tasks:` trailer line.
+- Sanity check: paste the output of
+    grep -E '^module GitHub.Release.Check' lib/GitHub/Release/Check.hs
+  and
+    grep -A 10 'exposed-modules:' github-release-check.cabal | head -20
+  so the orchestrator can verify the umbrella shape and the cabal entries.
 - Residual risks or follow-ups, if any.
 ```
 
@@ -151,7 +233,7 @@ Context:
   `feat(optparse): add versionOption helper sublibrary`
 - Commit body MUST include trailer: `Tasks: T004, T005, T006`
 - Sign with GPG (`git commit -S`).
-- Slice S1 is ASSUMED ALREADY MERGED into the branch (CliBanner is available via `import GitHub.Release.Check.Cli (CliBanner (..))`).
+- Slice S1 is ASSUMED ALREADY MERGED into the branch. CliBanner is available via `import GitHub.Release.Check.Cli (CliBanner (..))`; the engine extraction has also landed, so `Config` / `defaultConfig` / `withUpdateCheck` now live in `GitHub.Release.Check.Engine` (still re-exported via the umbrella).
 
 Owned files:
 - lib/GitHub/Release/Check/OptParse.hs (new, lives in sublibrary)

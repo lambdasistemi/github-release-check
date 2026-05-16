@@ -4,6 +4,29 @@ This is the pinned signature contract for the two new helpers. Any
 deviation from these signatures during implementation requires a
 plan amendment.
 
+## Module `GitHub.Release.Check.Engine` (new, in core library — refactor extracted from the umbrella)
+
+To break the cycle between `Cli` (which needs `Config`, `defaultConfig`, `withUpdateCheck`) and the umbrella `GitHub.Release.Check` (which re-exports `module GitHub.Release.Check.Cli`), the engine definitions currently living in `lib/GitHub/Release/Check.hs` are extracted verbatim into a new leaf module.
+
+```haskell
+module GitHub.Release.Check.Engine
+    ( -- * Configuration
+      Config (..)
+    , defaultConfig
+
+      -- * Entry points
+    , withUpdateCheck
+    , runUpdateCheck
+
+      -- * Banner rendering
+    , renderBanner
+    ) where
+```
+
+**Move, do not change**: `Config (..)`, `defaultConfig`, `withUpdateCheck`, `runUpdateCheck`, `renderBanner` (and the private `runUnsafe` helper) move from `GitHub.Release.Check.hs` to `GitHub.Release.Check.Engine.hs` **byte-for-byte**. No field renames, no signature tweaks, no haddock rewrites. The same imports (`GitHub.Release.Check.Cache`, `GitHub.Release.Check.Decision`, `GitHub.Release.Check.Fetcher`) move with them.
+
+Result: `GitHub.Release.Check.Engine` is a leaf — depends only on `Cache`, `Decision`, `Fetcher` (which are also leaves). `Cli` then imports `Config`, `defaultConfig`, `withUpdateCheck` directly from `Engine` (no cycle). The umbrella becomes pure re-export plumbing.
+
 ## Module `GitHub.Release.Check.Cli` (new, in core library)
 
 ```haskell
@@ -16,7 +39,7 @@ module GitHub.Release.Check.Cli
 import Data.Text (Text)
 import Data.Version (Version)
 
-import GitHub.Release.Check (Config)
+import GitHub.Release.Check.Engine (Config)
 import GitHub.Release.Check.Fetcher (RepoSlug)
 
 data CliBanner = CliBanner
@@ -43,28 +66,36 @@ withCli
     -> IO a
 ```
 
-## Module `GitHub.Release.Check` (existing, additive change only)
+## Module `GitHub.Release.Check` (existing — becomes pure re-export plumbing)
+
+After the S1 refactor the umbrella holds **no definitions** — only re-exports of its four leaf modules:
 
 ```haskell
 module GitHub.Release.Check
-    ( -- ... all existing exports preserved verbatim ...
-
-      -- * Bundled CLI helper (new)
-      module GitHub.Release.Check.Cli
+    ( module GitHub.Release.Check.Cli
+    , module GitHub.Release.Check.Decision
+    , module GitHub.Release.Check.Engine
+    , module GitHub.Release.Check.Fetcher
     ) where
 
 import GitHub.Release.Check.Cli
+import GitHub.Release.Check.Decision
+import GitHub.Release.Check.Engine
+import GitHub.Release.Check.Fetcher
 ```
 
-Re-export-only change. **No existing identifier is removed, renamed, or has its type changed.**
+The module header / haddock docstring at the top of `GitHub.Release.Check.hs` stays — it's the public-surface introduction the consumer reads first. The umbrella's import list and the re-export list change; nothing else.
 
-Specifically still exported, unchanged:
+**Consumer compatibility**: a consumer writing `import GitHub.Release.Check (Config (..), defaultConfig, withUpdateCheck, renderBanner, RepoSlug (..))` continues to compile unchanged. Re-export through the umbrella preserves the entire public surface.
 
-- `Config (..)`, `defaultConfig`
-- `withUpdateCheck`, `runUpdateCheck`
-- `module GitHub.Release.Check.Decision` (all of `Decision`)
-- `module GitHub.Release.Check.Fetcher` (`RepoSlug`, `Fetcher`, `httpFetcher`, etc.)
-- `renderBanner`
+Specifically still exported via the umbrella, unchanged for consumers:
+
+- `Config (..)`, `defaultConfig` (now defined in `Engine`)
+- `withUpdateCheck`, `runUpdateCheck` (now defined in `Engine`)
+- `renderBanner` (now defined in `Engine`)
+- `module GitHub.Release.Check.Decision` (all of `Decision`, unchanged)
+- `module GitHub.Release.Check.Fetcher` (`RepoSlug`, `Fetcher`, `httpFetcher`, etc., unchanged)
+- `CliBanner (..)`, `composeCliConfig`, `withCli` (new, defined in `Cli`)
 
 ## Module `GitHub.Release.Check.OptParse` (new, in sublibrary `github-release-check:optparse`)
 
@@ -88,13 +119,14 @@ versionOption :: CliBanner -> Parser (a -> a)
 ## Cabal manifest deltas
 
 ```cabal
--- existing `library` section: add the new module to exposed-modules
+-- existing `library` section: add two new modules to exposed-modules
 library
   exposed-modules:
     GitHub.Release.Check
     GitHub.Release.Check.Cache
     GitHub.Release.Check.Cli           -- NEW
     GitHub.Release.Check.Decision
+    GitHub.Release.Check.Engine        -- NEW (extracted from GitHub.Release.Check)
     GitHub.Release.Check.Fetcher
   -- build-depends unchanged
 
@@ -146,11 +178,12 @@ test-suite unit-tests
 
 | Surface | Before | After | Compatible? |
 |---|---|---|---|
-| `Config (..)` | unchanged | unchanged | ✅ |
-| `defaultConfig`, `withUpdateCheck`, `runUpdateCheck` | unchanged | unchanged | ✅ |
+| `Config (..)` (re-exported via `GitHub.Release.Check`) | defined in umbrella | defined in `Engine`, re-exported via umbrella | ✅ |
+| `defaultConfig`, `withUpdateCheck`, `runUpdateCheck` (re-exported via umbrella) | defined in umbrella | defined in `Engine`, re-exported via umbrella | ✅ |
 | `RepoSlug` | unchanged | unchanged | ✅ |
-| `renderBanner` | unchanged | unchanged | ✅ |
-| Re-exports of `Decision`, `Fetcher` | unchanged | unchanged | ✅ |
+| `renderBanner` (re-exported via umbrella) | defined in umbrella | defined in `Engine`, re-exported via umbrella | ✅ |
+| Re-exports of `Decision`, `Fetcher` via umbrella | unchanged | unchanged | ✅ |
+| Direct imports of `GitHub.Release.Check.Engine` | n/a | new, public | ✅ (additive) |
 | Cache file format / location | unchanged | unchanged | ✅ |
 | Network behaviour (URL, headers, timeout default) | unchanged | unchanged | ✅ |
 | `optparse-applicative` in **core** `build-depends` | absent | absent | ✅ |
