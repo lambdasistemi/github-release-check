@@ -1,0 +1,7 @@
+dist-newstyle/
+result
+result-*
+.direnv/
+.envrc.local
+.llm/
+WIP.md
