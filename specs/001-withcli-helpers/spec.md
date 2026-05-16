@@ -5,6 +5,13 @@
 **Status**: Draft
 **Input**: User description: "Expose `withCli` + `versionOption` helpers to remove boilerplate in consumer `Main` modules (issue #3)"
 
+## Clarifications
+
+### Session 2026-05-16
+
+- Q: How should `versionOption` be packaged so it does not force `optparse-applicative` on consumers who only want `withCli`? → A: Cabal sublibrary `github-release-check:optparse` — the helper lives there and carries the `optparse-applicative` dependency. The core `github-release-check` library stays free of `optparse-applicative`. Consumers who want `--version` add `github-release-check:optparse` to their `build-depends`; consumers who only want `withCli` are unaffected.
+- Q: Should `withCli` give consumers a way to override `Config` fields beyond the four `CliBanner` values (cache path, intervals, print sink, fetcher, etc.) without dropping down to `defaultConfig` + `withUpdateCheck`? → A: Yes — `withCli` takes an explicit `Config -> Config` modifier so consumers can tweak any tunable while keeping the one-liner shape. The opt-out env-var kill switch (FR-002) takes precedence over the modifier so the documented kill switch invariant cannot be silently re-enabled.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 — Wire the upgrade banner with one line (Priority: P1)
@@ -56,6 +63,16 @@ site that exercises this story end-to-end on every build.
    `withUpdateCheck` directly, **When** this feature ships, **Then**
    that consumer still compiles and behaves identically without source
    changes (additive surface, no breaking renames).
+5. **Given** a consumer that needs a non-default `Config` field
+   (e.g. a custom cache path or a stdout print sink), **When** they
+   pass a `Config -> Config` modifier to `withCli`, **Then** the
+   override is applied and the wrapped action runs with the modified
+   `Config`, without forcing the consumer to abandon the one-liner
+   shape for `defaultConfig` + `withUpdateCheck`.
+6. **Given** a consumer whose modifier sets `cfgDisabled = False`,
+   **When** the opt-out env var named in the banner record is set,
+   **Then** the update check is still disabled (env-var kill switch
+   wins over the modifier).
 
 ---
 
@@ -166,17 +183,25 @@ shape and the location of the opt-out env-var convention.
 ### Functional Requirements
 
 - **FR-001**: The library MUST expose a single helper — referred to
-  here as `withCli` — that accepts (a) a record bundling the
-  consumer's repository slug, executable name, current `Version`, and
-  opt-out env-var name, and (b) an `IO a` action, and runs the action
-  with the existing `withUpdateCheck` semantics layered on top.
+  here as `withCli` — that accepts (a) a banner record bundling the
+  consumer's repository slug, executable name, current `Version`,
+  and opt-out env-var name, (b) a `Config -> Config` modifier so
+  consumers can override any tunable (cache path, intervals, print
+  sink, fetcher, …) without dropping back to the legacy stanza, and
+  (c) an `IO a` action. It runs the action with the existing
+  `withUpdateCheck` semantics layered on top.
 - **FR-002**: The helper MUST read the supplied opt-out env-var name
-  via `lookupEnv` and set the underlying `cfgDisabled` flag to `True`
-  iff the variable is present (matching the existing
-  `isJust <$> lookupEnv …` convention).
+  via `lookupEnv` and set the underlying `cfgDisabled` flag to
+  `True` iff the variable is present (matching the existing
+  `isJust <$> lookupEnv …` convention). This env-var kill switch
+  MUST take precedence over the `Config -> Config` modifier — that
+  is, if the env var is set, `cfgDisabled` is `True` in the final
+  `Config` regardless of what the modifier did.
 - **FR-003**: The helper MUST build the underlying `Config` via the
   existing `defaultConfig`, so that any future change to defaults
-  flows through both the raw and the bundled API.
+  flows through both the raw and the bundled API. The order is:
+  `defaultConfig` → apply consumer modifier → apply env-var kill
+  switch.
 - **FR-004**: The library MUST continue to export `withUpdateCheck`,
   `runUpdateCheck`, `defaultConfig`, `Config (..)`, `RepoSlug`,
   `renderBanner`, and the `Decision` / `Fetcher` re-exports
@@ -186,26 +211,27 @@ shape and the location of the opt-out env-var convention.
   when plumbed into a consumer parser, prints `<exe> <semver>` on a
   single line and exits with status `0`, using the same banner record
   as `withCli` so the exe name and version are sourced from one
-  place.
-  [NEEDS CLARIFICATION: Packaging of `versionOption` — the issue
-  explicitly leaves the choice open between (a) a Cabal sublibrary
-  `github-release-check:optparse` carrying the `optparse-applicative`
-  dependency, and (b) a polymorphic API that takes the consumer's
-  parser-applicative as an argument so no new sublibrary is needed.
-  This decision affects what the consumer adds to their
-  `build-depends` and how they import the helper.]
-- **FR-006**: The core library (the default `github-release-check`
-  component a consumer pulls in) MUST NOT add `optparse-applicative`
-  to its `build-depends`. A consumer that only uses `withCli` MUST
-  NOT transitively pull `optparse-applicative` into their build plan.
+  place. The helper MUST live in a dedicated Cabal sublibrary
+  `github-release-check:optparse` (per the 2026-05-16 clarification),
+  which is the sole carrier of the `optparse-applicative`
+  dependency.
+- **FR-006**: The core `github-release-check` library (the default
+  component a consumer pulls in via `build-depends:
+  github-release-check`) MUST NOT add `optparse-applicative` to its
+  `build-depends`. A consumer that uses only `withCli` MUST NOT
+  transitively pull `optparse-applicative` into their build plan.
+  Only consumers that additionally depend on
+  `github-release-check:optparse` pull in `optparse-applicative`.
 - **FR-007**: The banner record (the record passed to `withCli` and
   `versionOption`) MUST keep the opt-out env-var name as a required,
   caller-supplied field. The library MUST NOT bake a default name
   into the type.
 - **FR-008**: The in-repo canary executable
   (`github-release-check-canary`) MUST be rewritten to use both
-  `withCli` and `versionOption` (it gains a `--version` flag), so the
-  feature is dogfooded end-to-end on every CI build.
+  `withCli` (depending on the core library) and `versionOption`
+  (depending on the new `github-release-check:optparse` sublibrary).
+  It gains a `--version` flag. This dogfoods both the core helper and
+  the sublibrary integration end-to-end on every CI build.
 - **FR-009**: The project `README.md` MUST be rewritten so the
   primary "Usage" example shows the `withCli` one-liner, with the
   existing `defaultConfig` / `withUpdateCheck` usage retained as a
@@ -219,10 +245,13 @@ shape and the location of the opt-out env-var convention.
 
 - **Banner record** (working name `CliBanner`): bundles the four
   values every consumer already supplies — repository slug,
-  executable name, current `Version`, opt-out env-var name. It is the
-  single argument both `withCli` and `versionOption` take, so the
-  consumer defines it once per executable and re-uses it across both
-  helpers.
+  executable name, current `Version`, opt-out env-var name. It is
+  the single banner argument both `withCli` and `versionOption`
+  take, so the consumer defines it once per executable and re-uses
+  it across both helpers. `withCli` additionally takes a separate
+  `Config -> Config` modifier (defaults to `id` in practice for
+  most consumers) for overriding tunables beyond the four banner
+  fields.
 
 ## Success Criteria *(mandatory)*
 
