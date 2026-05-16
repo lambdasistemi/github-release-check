@@ -56,7 +56,9 @@ library
   exposed-modules:
     GitHub.Release.Check
     GitHub.Release.Check.Cache
+    GitHub.Release.Check.Cli
     GitHub.Release.Check.Decision
+    GitHub.Release.Check.Engine
     GitHub.Release.Check.Fetcher
 
   build-depends:
@@ -99,6 +101,7 @@ test-suite unit-tests
   build-tool-depends: hspec-discover:hspec-discover
   other-modules:
     GitHub.Release.Check.CacheSpec
+    GitHub.Release.Check.CliSpec
     GitHub.Release.Check.DecisionSpec
 
   build-depends:
