@@ -71,6 +71,25 @@ library
     , text             >=2.0  && <2.2
     , time             >=1.12 && <1.15
 
+-- Canary executable: wires the library against the library's own
+-- GitHub repo. The point is integration coverage — exercise the full
+-- IO path (cache file, fetcher, decision, banner sink) end-to-end on
+-- every build, so a regression in any of those layers fails CI here
+-- before downstream consumers pull a broken pin.
+executable github-release-check-canary
+  import:           warnings
+  hs-source-dirs:   app/canary
+  main-is:          Main.hs
+  default-language: GHC2021
+  autogen-modules:  Paths_github_release_check
+  other-modules:    Paths_github_release_check
+  build-depends:
+    , base
+    , github-release-check
+    , text
+
+  ghc-options:      -threaded -rtsopts -with-rtsopts=-N
+
 test-suite unit-tests
   import:             warnings
   type:               exitcode-stdio-1.0

@@ -45,9 +45,18 @@
             default = components.library;
             inherit (components) library;
             unit-tests = components.tests.unit-tests;
+            canary =
+              components.exes.github-release-check-canary;
           };
           checks = publicChecks;
-          apps = checkApps;
+          apps = checkApps // {
+            canary = {
+              type = "app";
+              program = "${
+                  components.exes.github-release-check-canary
+                }/bin/github-release-check-canary";
+            };
+          };
           devShells.default = project.shell;
         };
     };

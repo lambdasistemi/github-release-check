@@ -6,7 +6,8 @@ let
       runtimeInputs = [ ];
       text = ''
         test -e ${components.library}
-        echo "library realized"
+        test -e ${components.exes.github-release-check-canary}
+        echo "library + canary realized"
       '';
     };
 
@@ -14,6 +15,31 @@ let
       runtimeInputs = [ components.tests.unit-tests ];
       text = ''
         unit-tests
+      '';
+    };
+
+    # Dogfood the library against itself. The canary exercises the
+    # full IO path (cache, fetcher, decision, banner sink). The check
+    # disables the actual network call via the opt-out env var so the
+    # nix sandbox stays hermetic — but the IO wiring still runs and
+    # any crash in the call chain fails the build.
+    canary = {
+      runtimeInputs = [
+        components.exes.github-release-check-canary
+      ];
+      text = ''
+        export GITHUB_RELEASE_CHECK_CANARY_NO_UPDATE_CHECK=1
+        actual="$(github-release-check-canary)"
+        expected_prefix="github-release-check-canary 0."
+        case "$actual" in
+          "$expected_prefix"*) ;;
+          *)
+            printf 'canary: unexpected stdout: %s\n' \
+              "$actual" >&2
+            exit 1
+            ;;
+        esac
+        printf '%s\n' "$actual"
       '';
     };
 
@@ -59,5 +85,6 @@ in {
   build = mkCheck "build" scripts.build;
   unit = mkCheck "unit" scripts.unit;
   lint = mkCheck "lint" scripts.lint;
+  canary = mkCheck "canary" scripts.canary;
   inherit apps;
 }
