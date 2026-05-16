@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
   pull_request:
@@ -16,5 +17,37 @@ jobs:
     runs-on: nixos
     steps:
       - uses: actions/checkout@v6
-      - name: Stub CI
-        run: echo "CI stub — will be replaced by real CI"
+      - uses: cachix/cachix-action@v17
+        with:
+          name: paolino
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Build all derivations
+        run: >-
+          nix build --quiet
+          .#checks.x86_64-linux.build
+          .#checks.x86_64-linux.unit
+          .#checks.x86_64-linux.lint
+
+  unit:
+    name: Unit tests
+    needs: build-gate
+    runs-on: nixos
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/cachix-action@v17
+        with:
+          name: paolino
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - run: nix run --quiet .#unit
+
+  lint:
+    name: Lint
+    needs: build-gate
+    runs-on: nixos
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/cachix-action@v17
+        with:
+          name: paolino
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - run: nix run --quiet .#lint
