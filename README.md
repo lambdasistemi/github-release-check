@@ -88,8 +88,24 @@ nix develop --quiet
 just unit          # cabal test unit-tests
 just format        # fourmolu + cabal-fmt
 just hlint
-nix flake check    # full local CI mirror
+nix flake check    # full local CI mirror (build + unit + lint + canary)
 ```
+
+### Canary
+
+`github-release-check-canary` is a tiny executable that wires the
+library against this repository. It runs in CI on every build (with
+the network call disabled to keep the sandbox hermetic) and operators
+can invoke it live to probe the real GitHub API:
+
+```bash
+nix run .#canary
+# github-release-check-canary 0.1.0.0 — library wired against lambdasistemi/github-release-check
+```
+
+If a newer release is available the library prints its banner to
+stderr after the canary line. Setting
+`GITHUB_RELEASE_CHECK_CANARY_NO_UPDATE_CHECK=1` disables the check.
 
 ## License
 

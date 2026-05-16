@@ -17,3 +17,7 @@ and the project adheres to [Haskell PVP](https://pvp.haskell.org/).
   one for banner prints).
 - `Fetcher` abstraction so tests can stub the HTTP layer.
 - Silent failure on network errors / parse errors / timeouts.
+- `github-release-check-canary` executable that wires the library
+  against this repository — runs in CI to guard the full IO path
+  against regressions; operators can invoke `nix run .#canary` as a
+  live probe against the real GitHub API.
