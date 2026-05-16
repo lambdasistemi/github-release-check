@@ -158,44 +158,39 @@ logic.
   to ≤ 4 lines once they bump the pin (verified by quoting the future
   consumer shape in the README — actual migration is out of scope).
 
-## Open questions for the user (specs stop)
+## Locked decisions (specs stop, 2026-05-16)
 
-These are recorded here, not yet decided. The plan phase needs an
-answer before tasks/code:
+The three open questions from the first spec draft are now answered.
+The plan phase takes these as fixed inputs.
 
-1. **Module location of `withCli`.** Two reasonable choices:
-   - put `CliBanner` and `withCli` in `GitHub.Release.Check` directly
-     (one fewer module, smaller surface);
-   - put them in `GitHub.Release.Check.Cli` and re-export from
-     `GitHub.Release.Check` (cleaner separation, more files).
+1. **Module location of `withCli`** — new module
+   `GitHub.Release.Check.Cli`, re-exported from `GitHub.Release.Check`.
+   The "raw" `Check` module stays focused on the update-check engine;
+   the optparse sublibrary imports `Cli` directly without dragging
+   the engine re-exports. (Reflects the user's general preference for
+   separate sibling modules over folding into the engine module.)
 
-   Recommendation: **new `GitHub.Release.Check.Cli` module,
-   re-exported from `GitHub.Release.Check`**. Rationale: keeps the
-   "raw" `Check` module focused on the update-check engine and lets
-   the optparse sublibrary import `Cli` without dragging the engine
-   re-exports.
+2. **Canary dogfoods `versionOption`** — the canary depends on
+   `github-release-check:optparse` and grows a real
+   `optparse-applicative` parser with `--version` plumbed through
+   `versionOption`. Leaving the new sublibrary uncovered would defeat
+   the canary's integration-coverage purpose. Cost: one extra dep on
+   one tiny executable, not on the library.
 
-2. **Should the canary depend on `github-release-check:optparse` to
-   get `--version`?** The canary currently has no argument parser at
-   all (just `main = ...`). Adding `--version` is the natural dogfood
-   for `versionOption`, but it grows the canary dep closure to
-   include `optparse-applicative`.
+3. **README worked example is inlined** — a 6-line `tx-validate`-shaped
+   example lives in the README, with a footnote pointing at
+   [cardano-tx-tools#27][downstream]. Replace with a permalink to the
+   real `tx-validate` `Main.hs` once #27 merges.
 
-   Recommendation: **yes, dogfood it.** The canary's whole job is
-   integration coverage; not exercising `versionOption` leaves the
-   new sublibrary uncovered. Cost is one extra dep on one tiny
-   executable, not on the library.
+### Derived measurable outcomes (in addition to the list above)
 
-3. **Banner sink for the consumer-side worked example in the README.**
-   The issue says "linking from cardano-tx-tools' tx-validate
-   demonstrates the one-liner shape." Until that downstream change
-   actually lands, do we link to the future call site, or inline the
-   example?
-
-   Recommendation: **inline a 6-line example in the README** showing
-   the target `tx-validate` `Main.hs` shape, and add a footnote
-   pointing at [#27][downstream]. Replace with a permalink once the
-   downstream PR is merged.
+- New module `GitHub.Release.Check.Cli` is exposed and re-exported
+  from `GitHub.Release.Check`. Existing imports of
+  `GitHub.Release.Check` continue to compile.
+- Canary executable `build-depends` on `github-release-check:optparse`
+  and its `main` plumbs `--version` through `versionOption`.
+- README inlines a 6-line `tx-validate`-shaped `withCli` example with
+  a footnote linking to [cardano-tx-tools#27][downstream].
 
 ## Gate sketch (for the plan phase)
 
