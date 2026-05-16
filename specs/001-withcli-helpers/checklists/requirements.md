@@ -21,10 +21,11 @@
 
 ## Requirement Completeness
 
-- [ ] No [NEEDS CLARIFICATION] markers remain
-  *(One marker remains on **FR-005** — `versionOption` packaging.
-  This is the genuine open API question the issue leaves to the
-  designer; deferred to `/speckit.clarify`.)*
+- [X] No [NEEDS CLARIFICATION] markers remain
+  *(Resolved 2026-05-16 via `/speckit.clarify`: FR-005 packaging =
+  sublibrary `github-release-check:optparse`; FR-001 / FR-002 /
+  FR-003 augmented with the `Config -> Config` modifier and the
+  env-var-wins precedence rule.)*
 - [X] Requirements are testable and unambiguous
 - [X] Success criteria are measurable
 - [X] Success criteria are technology-agnostic (no implementation details)
@@ -44,9 +45,14 @@
 
 ## Notes
 
-- One `[NEEDS CLARIFICATION]` marker remains on **FR-005**
-  (`versionOption` packaging: sublibrary vs polymorphic). This is by
-  design — the source issue explicitly leaves the choice open. The
-  next phase (`/speckit.clarify`) is the natural place to resolve it,
-  and the user has chosen to stop at the **specs** phase first, so
-  this marker is acceptable for the current stop.
+- Initial spec carried one `[NEEDS CLARIFICATION]` marker on
+  **FR-005** (`versionOption` packaging). Resolved 2026-05-16 by
+  `/speckit.clarify` Q1 → sublibrary `github-release-check:optparse`.
+- `/speckit.clarify` Q2 also added a `Config -> Config` modifier to
+  `withCli`'s shape (FR-001) with env-var-kill-switch precedence
+  (FR-002/FR-003) — preserves the one-liner shape when consumers
+  need non-default tunables. New acceptance scenarios cover both
+  the override (P1 #5) and the kill-switch precedence (P1 #6).
+- No outstanding `[NEEDS CLARIFICATION]` markers. Ready for
+  `/speckit.plan` once the user authorises advancing past the spec
+  stop.
