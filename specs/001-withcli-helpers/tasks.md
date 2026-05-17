@@ -365,7 +365,7 @@ Report back:
 
 ### Tasks for slice S4
 
-- [ ] T010 [US3] ORCHESTRATOR-OWNED, docs only — Rewrite the "Usage" section of `README.md`. Lead example: a ~6-line `Main.hs` using `withCli` (mirroring [`quickstart.md` § 2](./quickstart.md#2-replace-the-8-line-stanza-with-one-call)). Secondary "Raw control" section: keep the `defaultConfig` + `withUpdateCheck` example referencing the existing exports. Add a "`--version` flag" subsection pointing to `github-release-check:optparse` and showing the `<**> versionOption banner` plumbing. Footnote: `cardano-tx-tools#27` as the downstream migration ticket. Commit as one bisect-safe `docs(readme): rewrite Usage section around withCli one-liner` commit — no `Tasks:` trailer required (per `commit_gate` rule: docs-typed commits skip the trailer).
+- [X] T010 (commit: 2a80ac4) [US3] ORCHESTRATOR-OWNED, docs only — Rewrite the "Usage" section of `README.md`. Lead example: a ~6-line `Main.hs` using `withCli` (mirroring [`quickstart.md` § 2](./quickstart.md#2-replace-the-8-line-stanza-with-one-call)). Secondary "Raw control" section: keep the `defaultConfig` + `withUpdateCheck` example referencing the existing exports. Add a "`--version` flag" subsection pointing to `github-release-check:optparse` and showing the `<**> versionOption banner` plumbing. Footnote: `cardano-tx-tools#27` as the downstream migration ticket. Commit as one bisect-safe `docs(readme): rewrite Usage section around withCli one-liner` commit — no `Tasks:` trailer required (per `commit_gate` rule: docs-typed commits skip the trailer).
 
 **Checkpoint**: After slice S4 ships, P3 acceptance scenarios (#1, #2, #3) hold.
 
