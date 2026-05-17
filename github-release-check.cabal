@@ -100,6 +100,8 @@ executable github-release-check-canary
   build-depends:
     , base
     , github-release-check
+    , github-release-check:optparse
+    , optparse-applicative           >=0.18 && <0.20
     , text
 
   ghc-options:      -threaded -rtsopts -with-rtsopts=-N

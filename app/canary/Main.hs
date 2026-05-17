@@ -4,58 +4,56 @@ Description : github-release-check-canary — dogfood the library
 Copyright   : (c) Paolo Veronelli, 2026
 License     : Apache-2.0
 
-A tiny executable that runs the @github-release-check@ library against
-this very repository. The point is integration coverage:
-
-* every build exercises the full IO path (cache file, HTTP fetcher,
-  decision rules, banner sink);
-* on every CI run, a regression in any of those layers fails here
-  before downstream consumers can pull a broken pin;
-* operators can invoke @nix run .#canary@ as a one-shot probe.
-
-The canary prints a single line and exits 0. If the live
-@releases\/latest@ for this repository reports a tag higher than the
-locally-built version, the library prints the banner to stderr
-after the action returns; otherwise nothing extra appears.
+A tiny executable that runs the github-release-check library against
+this very repository. Dogfoods withCli + versionOption end-to-end and
+serves as the in-repo proof site for both helpers.
 -}
 module Main (main) where
 
-import Data.Maybe (isJust)
 import Data.Text qualified as T
 import Data.Version (showVersion)
-import System.Environment (lookupEnv)
+import Options.Applicative
+    ( execParser
+    , fullDesc
+    , helper
+    , info
+    , (<**>)
+    )
 
 import GitHub.Release.Check
-    ( RepoSlug (..)
-    , cfgDisabled
-    , defaultConfig
-    , withUpdateCheck
+    ( CliBanner (..)
+    , RepoSlug (..)
+    , withCli
     )
+import GitHub.Release.Check.OptParse (versionOption)
 
 import Paths_github_release_check (version)
 
-owner, repo, exeName :: T.Text
-owner = "lambdasistemi"
-repo = "github-release-check"
-exeName = "github-release-check-canary"
+banner :: CliBanner
+banner =
+    CliBanner
+        { cliRepo =
+            RepoSlug "lambdasistemi" "github-release-check"
+        , cliExe = "github-release-check-canary"
+        , cliVersion = version
+        , cliOptOutEnvVar =
+            "GITHUB_RELEASE_CHECK_CANARY_NO_UPDATE_CHECK"
+        }
 
 main :: IO ()
 main = do
-    disabled <-
-        isJust
-            <$> lookupEnv
-                "GITHUB_RELEASE_CHECK_CANARY_NO_UPDATE_CHECK"
-    cfg <-
-        defaultConfig
-            (RepoSlug owner repo)
-            exeName
-            version
-    withUpdateCheck cfg{cfgDisabled = disabled} $
+    () <-
+        execParser
+            ( info
+                (pure () <**> versionOption banner <**> helper)
+                fullDesc
+            )
+    withCli banner id $
         putStrLn $
-            T.unpack exeName
+            T.unpack (cliExe banner)
                 <> " "
-                <> showVersion version
+                <> showVersion (cliVersion banner)
                 <> " — library wired against "
-                <> T.unpack owner
+                <> T.unpack (rsOwner (cliRepo banner))
                 <> "/"
-                <> T.unpack repo
+                <> T.unpack (rsName (cliRepo banner))
