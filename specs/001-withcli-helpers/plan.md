@@ -64,17 +64,22 @@ specs/001-withcli-helpers/
 
 ```text
 github-release-check.cabal       # ← +1 sublibrary section, +1 test-suite dep entry, canary dep updated
-lib/
+lib/                             # source root for the core `library` only
   GitHub/
     Release/
       Check.hs                   # ← becomes pure re-export plumbing (Cli + Decision + Engine + Fetcher)
       Check/
         Cli.hs                   # NEW — CliBanner type + composeCliConfig + withCli
         Engine.hs                # NEW — Config / defaultConfig / withUpdateCheck / runUpdateCheck / renderBanner (extracted byte-for-byte from the umbrella)
-        OptParse.hs              # NEW (in sublibrary) — versionOption
         Cache.hs                 # unchanged
         Decision.hs              # unchanged
         Fetcher.hs               # unchanged
+
+lib-optparse/                    # source root for the `optparse` sublibrary ONLY (separate from `lib/` so GHC resolves Cli via the package dep, not the local source — avoids dragging core deps into the sublibrary and avoids needing PackageImports)
+  GitHub/
+    Release/
+      Check/
+        OptParse.hs              # NEW — versionOption
 app/
   canary/
     Main.hs                      # ← rewritten to use withCli + versionOption
