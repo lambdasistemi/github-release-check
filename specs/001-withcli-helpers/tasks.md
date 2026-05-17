@@ -379,8 +379,8 @@ Report back:
 
 ### Tasks for slice S5
 
-- [ ] T011 ORCHESTRATOR-OWNED, finalization audit — Run the `finalization_audit <pr>` helper from the `resolve-ticket` skill. Verify every prior commit passes `commit_gate`; every behaviour-changing commit carries a `Tasks:` trailer; every closed task in `tasks.md` carries `[X] T### (commit: <sha>)`; `./gate.sh` is green at HEAD; README, contracts, quickstart, repository metadata are aligned with delivered behaviour; PR body is current.
-- [ ] T012 ORCHESTRATOR-OWNED, chore only — `git rm gate.sh && git commit -S -m "chore: drop gate.sh (ready for review)"`. Push. `gh pr ready 6`. This is the only commit allowed in slice S5; it must be the tip commit of the branch.
+- [X] T011 (commit: 794d6ca) ORCHESTRATOR-OWNED, finalization audit — Run the `finalization_audit <pr>` helper from the `resolve-ticket` skill. Verify every prior commit passes `commit_gate`; every behaviour-changing commit carries a `Tasks:` trailer; every closed task in `tasks.md` carries `[X] T### (commit: <sha>)`; `./gate.sh` is green at HEAD; README, contracts, quickstart, repository metadata are aligned with delivered behaviour; PR body is current.
+- [X] T012 (commit: 794d6ca) ORCHESTRATOR-OWNED, chore only — `git rm gate.sh && git commit -S -m "chore: drop gate.sh (ready for review)"`. Push. `gh pr ready 6`. This is the only commit allowed in slice S5; it must be the tip commit of the branch.
 
 **Checkpoint**: After S5, the PR moves to ready-for-external-review. Per resolve-ticket: do NOT self-approve via `gh pr review --approve`.
 
