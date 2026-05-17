@@ -131,9 +131,19 @@ library
   -- build-depends unchanged
 
 -- NEW sublibrary
+-- NOTE on hs-source-dirs: the sublibrary uses its OWN directory
+-- `lib-optparse/` (not `lib/`). Sharing `lib/` with the core library
+-- would put `Cli.hs` on the sublibrary's module search path, GHC
+-- would resolve `import GitHub.Release.Check.Cli` to the local source
+-- file (instead of pulling it from the `github-release-check` package
+-- dependency), and the sublibrary would end up needing every
+-- transitive dep of the core library. Giving the sublibrary its own
+-- directory containing only its own modules avoids that and keeps
+-- the sublibrary's `build-depends` minimal (no `PackageImports`
+-- extension needed).
 library optparse
   import:           warnings
-  hs-source-dirs:   lib
+  hs-source-dirs:   lib-optparse
   default-language: GHC2021
   exposed-modules:  GitHub.Release.Check.OptParse
   build-depends:

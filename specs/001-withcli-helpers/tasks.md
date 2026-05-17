@@ -215,7 +215,7 @@ Report back (exactly these fields):
 ### Tasks for slice S2
 
 - [ ] T004 [US2] RED — Add `test/GitHub/Release/Check/OptParseSpec.hs` (new) with hspec cases that **fail to compile** initially (import `GitHub.Release.Check.OptParse (versionOption)` which does not yet exist). Tests use `Options.Applicative.execParserPure` per [`research.md` Decision 8](./research.md#decision-8--test-approach-for-versionoption): (a) parsing `["--version"]` returns a `Failure` whose rendered output is exactly `"<cliExe banner> <showVersion (cliVersion banner)>\n"` and whose resolved exit code is `ExitSuccess`; (b) parsing `[]` against a baseline parser succeeds, leaves the underlying value untouched. Add `GitHub.Release.Check.OptParseSpec` to test-suite `other-modules`, add `github-release-check:optparse` and `optparse-applicative` to the test-suite `build-depends` (per [`contracts/public-api.md` § Cabal manifest deltas](./contracts/public-api.md#cabal-manifest-deltas)). Observe RED.
-- [ ] T005 [US2] GREEN — Add the `library optparse` section to `github-release-check.cabal` exactly as specified in [`contracts/public-api.md` § Cabal manifest deltas](./contracts/public-api.md#cabal-manifest-deltas). Add `lib/GitHub/Release/Check/OptParse.hs` (new, in `hs-source-dirs: lib` per the sublibrary section) defining `versionOption :: CliBanner -> Parser (a -> a)` and a private `renderVersion :: CliBanner -> String`, exactly matching the contract. Module header + Haddock on `versionOption`. Run `just unit` and confirm OptParseSpec passes.
+- [ ] T005 [US2] GREEN — Add the `library optparse` section to `github-release-check.cabal` exactly as specified in [`contracts/public-api.md` § Cabal manifest deltas](./contracts/public-api.md#cabal-manifest-deltas) (note `hs-source-dirs: lib-optparse`, NOT `lib`). Create `lib-optparse/GitHub/Release/Check/OptParse.hs` (new) defining `versionOption :: CliBanner -> Parser (a -> a)` and a private `renderVersion :: CliBanner -> String`, exactly matching the contract. The import of `CliBanner` is a plain `import GitHub.Release.Check.Cli (CliBanner (..))` — NO `PackageImports`. Module header + Haddock on `versionOption`. Run `just unit` and confirm OptParseSpec passes.
 - [ ] T006 [US2] FOLD — T004 and T005 MUST be a single bisect-safe commit.
 
 **Checkpoint**: After slice S2 ships, P2 acceptance scenarios (#1, #2, #3) hold. The core library's `build-depends` still does NOT include `optparse-applicative`.
@@ -236,22 +236,24 @@ Context:
 - Slice S1 is ASSUMED ALREADY MERGED into the branch. CliBanner is available via `import GitHub.Release.Check.Cli (CliBanner (..))`; the engine extraction has also landed, so `Config` / `defaultConfig` / `withUpdateCheck` now live in `GitHub.Release.Check.Engine` (still re-exported via the umbrella).
 
 Owned files:
-- lib/GitHub/Release/Check/OptParse.hs (new, lives in sublibrary)
+- lib-optparse/GitHub/Release/Check/OptParse.hs (NEW — sublibrary lives in its OWN source dir, NOT in lib/; this is the path you create)
 - test/GitHub/Release/Check/OptParseSpec.hs (new)
-- github-release-check.cabal (add `library optparse` section; add sublibrary + optparse-applicative to test-suite build-depends; add OptParseSpec to test-suite other-modules)
+- github-release-check.cabal (add `library optparse` section with `hs-source-dirs: lib-optparse`; add sublibrary + optparse-applicative to test-suite build-depends; add OptParseSpec to test-suite other-modules)
 
 Forbidden scope:
 - specs/
 - gate.sh (S3 territory)
 - README.md
 - app/canary/Main.hs (S3 territory)
-- lib/GitHub/Release/Check/Cli.hs and any other already-merged S1 file
+- lib/ (anything under it — Cli, Engine, Cache, Decision, Fetcher, the umbrella are all already-merged S1 territory)
 - Adding optparse-applicative to the core `library` build-depends — that is forbidden (FR-006). Only the sublibrary, test-suite, and (later, in S3) the canary depend on it.
+- `{-# LANGUAGE PackageImports #-}` and `import "pkg" Module …` syntax — using these means the sublibrary's `hs-source-dirs` is wrong. The correct shape is `hs-source-dirs: lib-optparse` so GHC resolves `import GitHub.Release.Check.Cli` via the `github-release-check` package dep, not from local source.
 
 Required orchestrator analysis already applied (do NOT re-derive):
 - Public-API contract: specs/001-withcli-helpers/contracts/public-api.md § "Module GitHub.Release.Check.OptParse" — `versionOption :: CliBanner -> Parser (a -> a)`.
 - Cabal manifest delta: same file § "Cabal manifest deltas" — the new `library optparse` section and the test-suite dep additions. Copy the structure as specified; do not invent new fields.
 - Implementation shape: `versionOption b = infoOption (renderVersion b) (long "version" <> help "Show the version and exit")`. `renderVersion b = T.unpack (cliExe b) <> " " <> showVersion (cliVersion b)`.
+- Sublibrary source dir is its own directory `lib-optparse/`, separate from the core library's `lib/`. The file path you create is `lib-optparse/GitHub/Release/Check/OptParse.hs`. Plain `import GitHub.Release.Check.Cli (CliBanner (..))` — no PackageImports. With separate directories GHC cannot find Cli locally and falls through to the `github-release-check` package dependency, which is exactly what we want.
 - Test approach: `execParserPure defaultPrefs (info (pure () <**> versionOption banner) idm) ["--version"]` → match `Failure` constructor; use `renderFailure` to get the printed string and `ExitCode`. See research.md Decision 8.
 - `renderVersion` stays private to the OptParse module (not exported).
 
