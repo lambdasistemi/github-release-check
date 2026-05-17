@@ -11,7 +11,7 @@ format:
     #!/usr/bin/env bash
     set -euo pipefail
     for _ in {1..3}; do
-        fourmolu -i lib test
+        fourmolu -i lib lib-optparse test
     done
     cabal-fmt -i github-release-check.cabal
     nixfmt flake.nix nix/*.nix
@@ -20,14 +20,14 @@ format:
 format-check:
     #!/usr/bin/env bash
     set -euo pipefail
-    fourmolu -m check lib test
+    fourmolu -m check lib lib-optparse test
     diff -u github-release-check.cabal \
         <(cabal-fmt github-release-check.cabal)
 
 # Run hlint
 hlint:
     #!/usr/bin/env bash
-    hlint lib test
+    hlint lib lib-optparse test
 
 # Build the library
 build:

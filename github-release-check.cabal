@@ -73,6 +73,18 @@ library
     , text             >=2.0  && <2.2
     , time             >=1.12 && <1.15
 
+library optparse
+  import:           warnings
+  visibility:       public
+  hs-source-dirs:   lib-optparse
+  default-language: GHC2021
+  exposed-modules:  GitHub.Release.Check.OptParse
+  build-depends:
+    , base
+    , github-release-check
+    , optparse-applicative  >=0.18 && <0.20
+    , text
+
 -- Canary executable: wires the library against the library's own
 -- GitHub repo. The point is integration coverage — exercise the full
 -- IO path (cache file, fetcher, decision, banner sink) end-to-end on
@@ -103,6 +115,7 @@ test-suite unit-tests
     GitHub.Release.Check.CacheSpec
     GitHub.Release.Check.CliSpec
     GitHub.Release.Check.DecisionSpec
+    GitHub.Release.Check.OptParseSpec
 
   build-depends:
     , aeson
@@ -111,8 +124,10 @@ test-suite unit-tests
     , directory
     , filepath
     , github-release-check
-    , hspec                 >=2.11 && <2.12
-    , QuickCheck            >=2.14 && <2.16
-    , temporary             >=1.3  && <1.4
+    , github-release-check:optparse
+    , hspec                          >=2.11 && <2.12
+    , optparse-applicative           >=0.18 && <0.20
+    , QuickCheck                     >=2.14 && <2.16
+    , temporary                      >=1.3  && <1.4
     , text
     , time
