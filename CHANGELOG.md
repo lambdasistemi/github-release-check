@@ -10,7 +10,7 @@ and the project adheres to [Haskell PVP](https://pvp.haskell.org/).
 ### Added
 
 - Initial library: `GitHub.Release.Check.withUpdateCheck` wraps an `IO`
-  action and, on exit, prints a one-line banner to a caller-supplied
+  action and, on exit, prints a two-line banner to a caller-supplied
   sink when the GitHub Releases API reports a newer version than the
   configured current version.
 - On-disk cache with two independent rate limits (one for GitHub hits,
